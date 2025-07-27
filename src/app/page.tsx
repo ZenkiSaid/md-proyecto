@@ -1,87 +1,126 @@
 "use client";
 
 import { useState } from "react";
+import {
+  estadoInicial,
+  obtenerSiguienteEstado,
+  EstadoClinico,
+  EventoClinico,
+  transiciones,
+} from "../lib/automataLogic";
+import AutomataGraph from "../components/AutomataGraph";
 
-export default function Home() {
-  const [estado, setEstado] = useState<string | null>(null);
+export default function HomePage() {
+  // Estado actual del paciente
+  const [estado, setEstado] = useState<EstadoClinico>(estadoInicial);
 
-  const [formData, setFormData] = useState({
-    tipoCancer: "",
-    estadio: "",
-    evento: "",
-  });
+  // Historial de transiciones con explicación
+  const [historial, setHistorial] = useState<
+    { evento: EventoClinico; nuevoEstado: EstadoClinico; explicacion: string }[]
+  >([]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  // Lista de eventos posibles
+  const eventos = Object.keys(transiciones[estado] || {}) as EventoClinico[];
+
+  // Manejar evento desde botones
+  const manejarEvento = (evento: EventoClinico) => {
+    const resultado = obtenerSiguienteEstado(estado, evento);
+    setEstado(resultado.nuevoEstado);
+    setHistorial((prev) => [
+      ...prev,
+      {
+        evento,
+        nuevoEstado: resultado.nuevoEstado,
+        explicacion: resultado.explicacion,
+      },
+    ]);
   };
 
-  const simular = () => {
-    // Lógica simulada muy simple solo para mostrar comportamiento
-    if (formData.evento.toLowerCase() === "inicio") {
-      setEstado("Tratamiento");
-    } else if (formData.evento.toLowerCase() === "respuesta completa") {
-      setEstado("Remisión");
-    } else if (formData.evento.toLowerCase() === "recaída") {
-      setEstado("Recaída");
-    } else {
-      setEstado("Estado no reconocido");
-    }
-  };
+  // Derivar estados visitados (incluye el inicial y todos los nuevos)
+  const estadosVisitados = new Set<EstadoClinico>([estadoInicial]);
+  historial.forEach((h) => estadosVisitados.add(h.nuevoEstado));
 
   return (
-    <div className="max-w-xl mx-auto pt-12 px-4">
-      <h1 className="text-3xl font-bold mb-2 text-center">Bienvenido</h1>
-      <p className="text-center text-base mb-6">
-        Ingrese los datos clínicos del paciente para iniciar la simulación
-      </p>
+    <main className="p-6 max-w-6xl mx-auto">
+      <h1 className="text-3xl font-bold mb-4">
+        Evolución clínica con autómatas finitos
+      </h1>
 
-      <div className="space-y-4 bg-white p-6 rounded-xl shadow border border-gray-200">
-        <div>
-          <label className="block text-sm font-medium mb-1">Tipo de cáncer</label>
-          <input
-            type="text"
-            name="tipoCancer"
-            value={formData.tipoCancer}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
-          />
+      {/* Grafo del autómata */}
+      <AutomataGraph
+        estadoActual={estado}
+        visitados={Array.from(estadosVisitados)}
+        onChangeEstado={(nuevoEstado, evento) => {
+          const explicacion = `Desde el estado "${estado}", al ocurrir el evento "${evento}", el nuevo estado es "${nuevoEstado}".`;
+          setEstado(nuevoEstado);
+          setHistorial((prev) => [
+            ...prev,
+            { evento: evento as EventoClinico, nuevoEstado, explicacion },
+          ]);
+        }}
+      />
+
+      {/* Estado actual */}
+      <div className="mb-6 p-4 rounded-2xl shadow bg-blue-50">
+        <h2 className="text-xl font-semibold mb-2">Estado actual</h2>
+        <p className="text-lg uppercase">
+          <span className="font-bold">{estado}</span>
+        </p>
+      </div>
+
+      {/* Botones de eventos */}
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold mb-2">Eventos clínicos</h2>
+        <div className="flex flex-wrap gap-3">
+          {eventos.map((evento) => (
+            <button
+              key={evento}
+              onClick={() => manejarEvento(evento)}
+              className="px-4 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white shadow transition"
+            >
+              {evento}
+            </button>
+          ))}
         </div>
+      </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Estadio</label>
-          <input
-            type="text"
-            name="estadio"
-            value={formData.estadio}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Evento clínico</label>
-          <input
-            type="text"
-            name="evento"
-            value={formData.evento}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
-          />
-        </div>
-
-        <button
-          onClick={simular}
-          className="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg"
-        >
-          Iniciar simulación
-        </button>
-
-        {estado && (
-          <div className="mt-4 text-center text-lg">
-            <strong>Estado actual:</strong> {estado}
-          </div>
+      {/* Historial */}
+      <div className="mb-6 p-4 rounded-2xl shadow bg-gray-50">
+        <h2 className="text-xl font-semibold mb-3">Historial de transiciones</h2>
+        {historial.length === 0 ? (
+          <p className="text-gray-500">No hay transiciones registradas aún.</p>
+        ) : (
+          <ul className="space-y-2">
+            {historial.map((item, index) => (
+              <li
+                key={index}
+                className="p-3 border rounded-lg bg-white shadow-sm"
+              >
+                <p className="text-sm text-gray-600">
+                  <span className="font-bold">Evento:</span> {item.evento}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <span className="font-bold">Nuevo estado:</span>{" "}
+                  {item.nuevoEstado}
+                </p>
+                <p className="text-sm text-gray-500 italic">
+                  {item.explicacion}
+                </p>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
-    </div>
+
+      {/* Información */}
+      <div className="mt-8 p-4 rounded-2xl bg-yellow-50 shadow">
+        <h2 className="text-xl font-semibold mb-2">Información</h2>
+        <p className="text-sm text-gray-700">
+          Este sistema simula la evolución clínica de un paciente con cáncer de
+          piel usando un autómata finito simbólico. Selecciona eventos para ver
+          cómo cambia el estado.
+        </p>
+      </div>
+    </main>
   );
 }
