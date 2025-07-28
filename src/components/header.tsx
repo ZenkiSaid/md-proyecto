@@ -1,13 +1,33 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
-import { Menu } from "lucide-react"; // Usa lucide-react para el icono si lo tienes instalado
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function Header() {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const router = useRouter();
+  const [loggedIn, setLoggedIn] = useState(false);
 
-  const toggleMenu = () => setMenuOpen(!menuOpen);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setLoggedIn(!!session);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setLoggedIn(!!session);
+    });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/auth");
+  };
+
+  if (!loggedIn) return null; // oculta el header si no hay sesión
 
   return (
     <div className="border-b border-black/10 px-5 py-3 flex items-center justify-between relative">
@@ -20,55 +40,12 @@ export default function Header() {
           Modelo simbólico basado en autómatas finitos para apoyar decisiones terapéuticas
         </p>
       </div>
-
-      {/* Navegación */}
-      <div className="flex items-center gap-4">
-        <ul className="flex items-center gap-4">
-          <li>
-            <Link href="/">
-              Home
-            </Link>
-          </li>
-          <li>
-            <Link href="/posts">
-              About
-            </Link>
-          </li>
-        </ul>
-
-        {/* Botón del menú hamburguesa */}
-        <button onClick={toggleMenu} className="text-blue-600 hover:text-blue-800">
-          <Menu className="w-6 h-6" />
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition"
+        >
+          Cerrar sesión
         </button>
-      </div>
-
-      {/* Menú desplegable */}
-      {menuOpen && (
-        <div className="absolute right-5 top-[65px] bg-white shadow-md border rounded-md py-2 px-4 z-50">
-          <ul className="flex flex-col gap-2 text-sm">
-            <li>
-              <Link href="/simulador" className="hover:underline" onClick={() => setMenuOpen(false)}>
-                Simulador
-              </Link>
-            </li>
-            <li>
-              <Link href="/reglas" className="hover:underline" onClick={() => setMenuOpen(false)}>
-                Reglas
-              </Link>
-            </li>
-            <li>
-              <Link href="/casos" className="hover:underline" onClick={() => setMenuOpen(false)}>
-                Casos
-              </Link>
-            </li>
-            <li>
-              <Link href="/documentacion" className="hover:underline" onClick={() => setMenuOpen(false)}>
-                Documentación
-              </Link>
-            </li>
-          </ul>
-        </div>
-      )}
     </div>
   );
 }

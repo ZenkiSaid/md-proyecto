@@ -21,7 +21,7 @@ export default function HomePage() {
   const [historial, setHistorial] = useState<HistorialItem[]>([]);
   const [visitados, setVisitados] = useState<Set<EstadoClinico>>(new Set());
 
-  // ✅ Cargar sesión al iniciar
+  // Cargar sesión al iniciar
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) {
@@ -55,7 +55,7 @@ export default function HomePage() {
     });
   }, [router]);
 
-  // ✅ Función para actualizar estado en Supabase
+  // Función para actualizar estado en Supabase
   const manejarEvento = async (evento: EventoClinico, nuevoEstado: EstadoClinico) => {
     const nuevaEntrada: HistorialItem = {
       evento,
@@ -87,11 +87,6 @@ export default function HomePage() {
     }
   };
 
-  // ✅ Botón logout
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/auth/login");
-  };
 
   if (!userId) {
     return (
@@ -102,7 +97,7 @@ export default function HomePage() {
     );
   }
 
-  // ✅ Eventos posibles desde el estado actual
+  // Eventos posibles desde el estado actual
   const eventos = Object.entries({
     iniciar_tratamiento: "tratamiento",
     respuesta_positiva: "remision",
@@ -124,12 +119,6 @@ export default function HomePage() {
       <div className="md:col-span-2">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-3xl font-bold">Evolución Clínica</h1>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 rounded bg-red-500 text-white hover:bg-red-600"
-          >
-            Cerrar sesión
-          </button>
         </div>
 
         {/* Estado actual */}

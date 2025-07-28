@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [edad, setEdad] = useState("");
   const [usuario, setUsuario] = useState("");
@@ -107,6 +109,14 @@ export default function RegisterPage() {
       >
         Registrar
       </button>
+      <div className="flex justify-center mt-4">
+        <button
+          onClick={() => router.push("/auth")}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          ← Volver a la página anterior
+        </button>
+      </div>
 
       {mensaje && <p className="mt-4 text-sm text-gray-700">{mensaje}</p>}
     </form>

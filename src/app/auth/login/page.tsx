@@ -63,6 +63,14 @@ export default function LoginPage() {
       >
         Iniciar sesión
       </button>
+      <div className="flex justify-center mt-4">
+        <button
+          onClick={() => router.push("/auth")}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          ← Volver a la página anterior
+        </button>
+      </div>
 
       {mensaje && <p className="mt-4 text-sm text-gray-700">{mensaje}</p>}
     </form>
