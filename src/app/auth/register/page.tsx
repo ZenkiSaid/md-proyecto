@@ -58,8 +58,7 @@ export default function RegisterPage() {
         setMensaje("Error al guardar paciente: " + insertError.message);
         return;
       }
-
-      setMensaje("Registro exitoso. Ya puedes iniciar sesión.");
+      router.push("/");
     }
   };
 

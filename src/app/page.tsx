@@ -25,13 +25,11 @@ export default function HomePage() {
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) {
-        // No hay sesión, redirigimos a login
         router.push("/auth");
         return;
       }
       setUserId(data.user.id);
 
-      // Cargar datos del paciente
       const { data: paciente, error } = await supabase
         .from("pacientes")
         .select("*")
@@ -55,8 +53,7 @@ export default function HomePage() {
     });
   }, [router]);
 
-  // Función para actualizar estado en Supabase
-  const manejarEvento = async (evento: EventoClinico, nuevoEstado: EstadoClinico) => {
+  const manejarEvento = (evento: EventoClinico, nuevoEstado: EstadoClinico) => {
     const nuevaEntrada: HistorialItem = {
       evento,
       nuevoEstado,
@@ -64,29 +61,34 @@ export default function HomePage() {
       fecha: new Date().toISOString(),
     };
 
-    const nuevoHistorial = [...historial, nuevaEntrada];
-    const nuevosVisitados = new Set(visitados);
-    nuevosVisitados.add(nuevoEstado);
-
     setEstado(nuevoEstado);
-    setHistorial(nuevoHistorial);
-    setVisitados(nuevosVisitados);
+    setHistorial((prev) => [...prev, nuevaEntrada]);
 
-    if (userId) {
-      const { error } = await supabase
-        .from("pacientes")
-        .update({
-          estado_actual: nuevoEstado,
-          historial: nuevoHistorial,
-        })
-        .eq("user_id", userId);
-
-      if (error) {
-        console.error("Error actualizando paciente:", error.message);
-      }
-    }
+    setVisitados((prev) => {
+      const nuevos = new Set(prev);
+      nuevos.add(nuevoEstado);
+      return nuevos;
+    });
   };
 
+  const guardarEnBaseDeDatos = async () => {
+    if (!userId) return;
+
+    const { error } = await supabase
+      .from("pacientes")
+      .update({
+        estado_actual: estado,
+        historial: historial,
+      })
+      .eq("user_id", userId);
+
+    if (error) {
+      alert("Error al guardar en la base de datos.");
+      console.error(error.message);
+    } else {
+      alert("Historial guardado correctamente.");
+    }
+  };
 
   if (!userId) {
     return (
@@ -97,7 +99,6 @@ export default function HomePage() {
     );
   }
 
-  // Eventos posibles desde el estado actual
   const eventos = Object.entries({
     iniciar_tratamiento: "tratamiento",
     respuesta_positiva: "remision",
@@ -107,10 +108,6 @@ export default function HomePage() {
     cuidados_paliativos: "paliativos",
     alta_medica: "curado",
     fallecimiento: "muerte",
-  }).filter(([evento, destino]) => {
-    // Mostrar solo los válidos desde este estado
-    // puedes cruzarlo con automataLogic si quieres
-    return true;
   });
 
   return (
@@ -152,7 +149,7 @@ export default function HomePage() {
               </button>
             ))}
           </div>
-          
+
           {/* Controles adicionales */}
           <div className="flex gap-3">
             <button
@@ -163,7 +160,7 @@ export default function HomePage() {
                 const estadoAnterior = nuevoHistorial.at(-1)?.nuevoEstado || "diagnostico";
                 setEstado(estadoAnterior);
                 setHistorial(nuevoHistorial);
-              
+
                 const nuevosVisitados = new Set(
                   nuevoHistorial.map((h) => h.nuevoEstado)
                 );
@@ -174,32 +171,16 @@ export default function HomePage() {
             >
               ⬅️ Deshacer
             </button>
-            
+
             <button
-              onClick={async () => {
-                if (!userId) return;
-                const { error } = await supabase
-                  .from("pacientes")
-                  .update({
-                    estado_actual: estado,
-                    historial: historial,
-                  })
-                  .eq("user_id", userId);
-                
-                if (error) {
-                  alert("Error al guardar en la base de datos.");
-                  console.error(error.message);
-                } else {
-                  alert("Historial guardado correctamente.");
-                }
-              }}
+              onClick={guardarEnBaseDeDatos}
               className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white shadow transition"
             >
               💾 Guardar
             </button>
           </div>
         </div>
-            
+
         {/* Historial */}
         <div className="mb-6 p-4 rounded-2xl shadow bg-gray-50">
           <h2 className="text-xl font-semibold mb-3">Historial</h2>
