@@ -36,7 +36,7 @@ export default function HomePage() {
         .from("pacientes")
         .select("*")
         .eq("user_id", data.user.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error("Error cargando paciente:", error.message);
@@ -139,7 +139,7 @@ export default function HomePage() {
         {/* Botones de eventos */}
         <div className="mb-6">
           <h2 className="text-xl font-semibold mb-2">Eventos clínicos</h2>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 mb-4">
             {eventos.map(([evento, destino]) => (
               <button
                 key={evento}
@@ -152,8 +152,54 @@ export default function HomePage() {
               </button>
             ))}
           </div>
+          
+          {/* Controles adicionales */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                if (historial.length === 0) return;
+                const nuevoHistorial = [...historial];
+                nuevoHistorial.pop();
+                const estadoAnterior = nuevoHistorial.at(-1)?.nuevoEstado || "diagnostico";
+                setEstado(estadoAnterior);
+                setHistorial(nuevoHistorial);
+              
+                const nuevosVisitados = new Set(
+                  nuevoHistorial.map((h) => h.nuevoEstado)
+                );
+                nuevosVisitados.add(estadoAnterior);
+                setVisitados(nuevosVisitados);
+              }}
+              className="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 shadow transition"
+            >
+              ⬅️ Deshacer
+            </button>
+            
+            <button
+              onClick={async () => {
+                if (!userId) return;
+                const { error } = await supabase
+                  .from("pacientes")
+                  .update({
+                    estado_actual: estado,
+                    historial: historial,
+                  })
+                  .eq("user_id", userId);
+                
+                if (error) {
+                  alert("Error al guardar en la base de datos.");
+                  console.error(error.message);
+                } else {
+                  alert("Historial guardado correctamente.");
+                }
+              }}
+              className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white shadow transition"
+            >
+              💾 Guardar
+            </button>
+          </div>
         </div>
-
+            
         {/* Historial */}
         <div className="mb-6 p-4 rounded-2xl shadow bg-gray-50">
           <h2 className="text-xl font-semibold mb-3">Historial</h2>
