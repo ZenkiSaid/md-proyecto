@@ -6,10 +6,12 @@ import { supabase } from "@/lib/supabaseClient";
 import AutomataGraph from "@/components/AutomataGraph";
 import { EstadoClinico, EventoClinico } from "@/lib/automataLogic";
 import { datosClinicos } from "@/lib/datosClinicos";
+import { transiciones } from "@/lib/automataLogic";
 
 type HistorialItem = {
-  evento: EventoClinico;
-  nuevoEstado: EstadoClinico;
+  estado: EstadoClinico;
+  descripcion: string;
+  eventoProximo: EventoClinico | null;
   explicacion: string;
   fecha: string;
 };
@@ -20,6 +22,7 @@ export default function HomePage() {
   const [estado, setEstado] = useState<EstadoClinico>("diagnostico");
   const [historial, setHistorial] = useState<HistorialItem[]>([]);
   const [visitados, setVisitados] = useState<Set<EstadoClinico>>(new Set());
+  const [notasPorEstado, setNotasPorEstado] = useState<Partial<Record<EstadoClinico, string>>>({});
 
   // Cargar sesión al iniciar
   useEffect(() => {
@@ -45,7 +48,7 @@ export default function HomePage() {
         setEstado(paciente.estado_actual);
         setHistorial(paciente.historial || []);
         const visitadosSet = new Set<EstadoClinico>(
-          (paciente.historial || []).map((h: any) => h.nuevoEstado)
+          (paciente.historial || []).map((h: any) => h.estado)
         );
         visitadosSet.add(paciente.estado_actual);
         setVisitados(visitadosSet);
@@ -53,40 +56,65 @@ export default function HomePage() {
     });
   }, [router]);
 
+  // Manejar transición de estado (sin actualizar historial todavía)
   const manejarEvento = (evento: EventoClinico, nuevoEstado: EstadoClinico) => {
+    const nuevosVisitados = new Set(visitados);
+    nuevosVisitados.add(nuevoEstado);
+    setEstado(nuevoEstado);
+    setVisitados(nuevosVisitados);
+  };
+
+  const deshacerUltimo = () => {
+    if (historial.length === 0) return;
+
+    const nuevoHistorial = [...historial];
+    nuevoHistorial.pop();
+    const ultimoEstado = nuevoHistorial.at(-1)?.estado || "diagnostico";
+    setEstado(ultimoEstado);
+    setHistorial(nuevoHistorial);
+
+    const nuevosVisitados = new Set(nuevoHistorial.map((h) => h.estado));
+    nuevosVisitados.add(ultimoEstado);
+    setVisitados(nuevosVisitados);
+  };
+
+  const guardarHistorial = async () => {
+    if (!userId) return;
+
     const nuevaEntrada: HistorialItem = {
-      evento,
-      nuevoEstado,
-      explicacion: `Desde ${estado} con evento ${evento} → ${nuevoEstado}`,
+      estado,
+      descripcion: notasPorEstado[estado] || "",
+      eventoProximo: null,
+      explicacion: `Estado actual registrado como ${estado}`,
       fecha: new Date().toISOString(),
     };
 
-    setEstado(nuevoEstado);
-    setHistorial((prev) => [...prev, nuevaEntrada]);
+    let nuevoHistorial: HistorialItem[] = [];
 
-    setVisitados((prev) => {
-      const nuevos = new Set(prev);
-      nuevos.add(nuevoEstado);
-      return nuevos;
-    });
-  };
+    const ultimo = historial[historial.length - 1];
 
-  const guardarEnBaseDeDatos = async () => {
-    if (!userId) return;
+    if (ultimo && ultimo.estado === estado) {
+      // Actualizar la última entrada
+      nuevoHistorial = [...historial];
+      nuevoHistorial[nuevoHistorial.length - 1] = nuevaEntrada;
+    } else {
+      // Agregar nueva entrada
+      nuevoHistorial = [...historial, nuevaEntrada];
+    }
+
+    setHistorial(nuevoHistorial);
 
     const { error } = await supabase
       .from("pacientes")
       .update({
         estado_actual: estado,
-        historial: historial,
+        historial: nuevoHistorial,
       })
       .eq("user_id", userId);
 
     if (error) {
       alert("Error al guardar en la base de datos.");
       console.error(error.message);
-    } else {
-      alert("Historial guardado correctamente.");
     }
   };
 
@@ -99,16 +127,7 @@ export default function HomePage() {
     );
   }
 
-  const eventos = Object.entries({
-    iniciar_tratamiento: "tratamiento",
-    respuesta_positiva: "remision",
-    respuesta_negativa: "recaida",
-    recaida_detectada: "recaida",
-    reiniciar_tratamiento: "tratamiento",
-    cuidados_paliativos: "paliativos",
-    alta_medica: "curado",
-    fallecimiento: "muerte",
-  });
+  const eventos = Object.entries(transiciones[estado] || {});
 
   return (
     <main className="p-6 max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -128,21 +147,17 @@ export default function HomePage() {
         <AutomataGraph
           estadoActual={estado}
           visitados={Array.from(visitados)}
-          onChangeEstado={(nuevoEstado, evento) =>
-            manejarEvento(evento as EventoClinico, nuevoEstado)
-          }
+          onChangeEstado={(nuevoEstado, evento) => manejarEvento(evento as EventoClinico, nuevoEstado)}
         />
 
-        {/* Botones de eventos */}
+        {/* Eventos */}
         <div className="mb-6">
           <h2 className="text-xl font-semibold mb-2">Eventos clínicos</h2>
           <div className="flex flex-wrap gap-3 mb-4">
             {eventos.map(([evento, destino]) => (
               <button
                 key={evento}
-                onClick={() =>
-                  manejarEvento(evento as EventoClinico, destino as EstadoClinico)
-                }
+                onClick={() => manejarEvento(evento as EventoClinico, destino as EstadoClinico)}
                 className="px-4 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white shadow transition"
               >
                 {evento}
@@ -153,27 +168,14 @@ export default function HomePage() {
           {/* Controles adicionales */}
           <div className="flex gap-3">
             <button
-              onClick={() => {
-                if (historial.length === 0) return;
-                const nuevoHistorial = [...historial];
-                nuevoHistorial.pop();
-                const estadoAnterior = nuevoHistorial.at(-1)?.nuevoEstado || "diagnostico";
-                setEstado(estadoAnterior);
-                setHistorial(nuevoHistorial);
-
-                const nuevosVisitados = new Set(
-                  nuevoHistorial.map((h) => h.nuevoEstado)
-                );
-                nuevosVisitados.add(estadoAnterior);
-                setVisitados(nuevosVisitados);
-              }}
+              onClick={deshacerUltimo}
               className="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 shadow transition"
             >
               ⬅️ Deshacer
             </button>
 
             <button
-              onClick={guardarEnBaseDeDatos}
+              onClick={guardarHistorial}
               className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white shadow transition"
             >
               💾 Guardar
@@ -191,10 +193,13 @@ export default function HomePage() {
               {historial.map((h, i) => (
                 <li key={i} className="p-3 border rounded-lg bg-white shadow-sm">
                   <p className="text-sm text-gray-600">
-                    <span className="font-bold">Evento:</span> {h.evento}
+                    <span className="font-bold">Estado:</span> {h.estado}
                   </p>
                   <p className="text-sm text-gray-600">
-                    <span className="font-bold">Nuevo estado:</span> {h.nuevoEstado}
+                    <span className="font-bold">Descripción:</span> {h.descripcion || "—"}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <span className="font-bold">Explicación:</span> {h.explicacion}
                   </p>
                   <p className="text-xs text-gray-500">{h.fecha}</p>
                 </li>
@@ -204,12 +209,13 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Panel lateral */}
+      {/* Aside derecho */}
       <aside className="p-4 rounded-2xl shadow bg-white h-fit space-y-4 sticky top-6 self-start">
         <h2 className="text-xl font-semibold mb-3">Datos clínicos</h2>
         <h3 className="text-lg font-bold">{datosClinicos[estado].titulo}</h3>
         <p className="text-sm text-gray-700 mb-4">{datosClinicos[estado].descripcion}</p>
 
+        {/* Extra paneles */}
         {datosClinicos[estado].tratamientos && (
           <>
             <h4 className="font-semibold text-sm mb-1">Tratamientos recomendados:</h4>
@@ -251,6 +257,23 @@ export default function HomePage() {
             <strong>Nota:</strong> {datosClinicos[estado].notas}
           </div>
         )}
+
+        {/* Descripción personalizada */}
+        <div className="mt-4">
+          <h3 className="font-semibold text-sm mb-1">Descripción específica del procedimiento actual</h3>
+          <textarea
+            className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring focus:border-blue-300 resize-none"
+            placeholder="Agregar detalles específicos sobre las acciones aplicadas al tratamiento clínico del paciente..."
+            value={notasPorEstado[estado] || ""}
+            onChange={(e) =>
+              setNotasPorEstado((prev) => ({
+                ...prev,
+                [estado]: e.target.value,
+              }))
+            }
+            rows={4}
+          />
+        </div>
       </aside>
     </main>
   );
