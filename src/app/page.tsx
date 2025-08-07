@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import AutomataGraph from "@/components/AutomataGraph";
-import { EstadoClinico, EventoClinico } from "@/lib/automataLogic";
+import { EstadoClinico, EventoClinico, transiciones, obtenerSiguienteEstado } from "@/lib/automataLogic";
 import { datosClinicos } from "@/lib/datosClinicos";
-import { transiciones } from "@/lib/automataLogic";
 
 type HistorialItem = {
   estado: EstadoClinico;
@@ -57,11 +56,13 @@ export default function HomePage() {
   }, [router]);
 
   // Manejar transición de estado (sin actualizar historial todavía)
+  const [eventoPrevio, setEventoPrevio] = useState<EventoClinico | null>(null);
   const manejarEvento = (evento: EventoClinico, nuevoEstado: EstadoClinico) => {
     const nuevosVisitados = new Set(visitados);
     nuevosVisitados.add(nuevoEstado);
     setEstado(nuevoEstado);
     setVisitados(nuevosVisitados);
+    setEventoPrevio(evento);
   };
 
   const deshacerUltimo = () => {
@@ -81,11 +82,16 @@ export default function HomePage() {
   const guardarHistorial = async () => {
     if (!userId) return;
 
+    const estadoAnterior = historial[historial.length - 1]?.estado || "diagnostico";
+    const evento = eventoPrevio || "iniciar_tratamiento";
+
+    const { explicacion } = obtenerSiguienteEstado(estadoAnterior, evento);
+    
     const nuevaEntrada: HistorialItem = {
       estado,
       descripcion: notasPorEstado[estado] || "",
-      eventoProximo: null,
-      explicacion: `Estado actual registrado como ${estado}`,
+      eventoProximo: evento,
+      explicacion,
       fecha: new Date().toISOString(),
     };
 
